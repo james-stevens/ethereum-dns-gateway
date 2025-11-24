@@ -1,8 +1,7 @@
 #! /bin/sh
 
 # test ETH -> curl 127.0.0.8:8081/content/bitsofcode.eth
-
-# curl -H 'accept: application/dns-message' 'http://127.0.0.8/?dns=q80BAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB'  | hexdump -c
+# dig @127.0.0.8 bitsofcode.eth uri
 
 
 docker run -it \
