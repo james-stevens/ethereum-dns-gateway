@@ -20,7 +20,7 @@ COPY inittab /etc/inittab
 COPY bin /usr/local/bin/
 RUN python3 -m compileall /usr/local/bin/
 
-RUN rm -f /var/cache/apk/*
+RUN rm -rf /var/cache/apk/* /usr/local/bin/.ruff_cache
 
 COPY build.txt /usr/local/etc/build.txt
 CMD [ "/sbin/init" ]
