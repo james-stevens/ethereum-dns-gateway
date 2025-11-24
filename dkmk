@@ -1,4 +1,5 @@
 #! /bin/bash
 
+python3 -m compileall bin
 date +%Y%m%d.%H%M > build.txt
 docker image build -t $(cat list) . $*
