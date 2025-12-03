@@ -22,18 +22,57 @@ app.get('/dns/:domain/:type', function (req, res) {
 	});
 
 
+app.get('/name/:wallet', function (req, res) {
+	id.getName(req.params.wallet).then((result) => {
+		if (result) {
+			let out = JSON.stringify({"name":result});
+			res.end(out);
+			}
+		else res.end(null);
+		}).catch((err) => { res.end(null); });
+	});
+
+app.get('/text/:domain', function (req, res) {
+	id.getText(req.params.domain,"url").then((result) => {
+		if (result) {
+			let out = JSON.stringify({"text":result});
+			res.end(out);
+			}
+		else res.end(null);
+		}).catch((err) => { res.end(null); });
+	});
+
+app.get('/owner/:domain', function (req, res) {
+	id.getOwner(req.params.domain).then((result) => {
+		if (result) {
+			let out = JSON.stringify({"owner":result});
+			res.end(out);
+			}
+		else res.end(null);
+		}).catch((err) => { res.end(null); });
+	});
+
+app.get('/wallet/:domain', function (req, res) {
+	id.getAddress(req.params.domain).then((result) => {
+		if (result) {
+			let out = JSON.stringify({"wallet":result});
+			res.end(out);
+			}
+		else res.end(null);
+		}).catch((err) => { res.end(null); });
+	});
 
 app.get('/content/:domain', function (req, res) {
-		id.getContentHash(req.params.domain).then((result) => {
-			if ((result)&&(result.hexBytes)&&(result.hexBytes!="0x")) {
-				res.end(JSON.stringify(
-					{
-					"codec":contentHash.getCodec(result.hexBytes),
-					"value":contentHash.decode(result.hexBytes)
-					}));
-				}
-			else res.end(null);
-			}).catch((err) => { res.end(null); });
+	id.getContentHash(req.params.domain).then((result) => {
+		if ((result)&&(result.hexBytes)&&(result.hexBytes!="0x")) {
+			res.end(JSON.stringify(
+				{
+				"codec":contentHash.getCodec(result.hexBytes),
+				"value":contentHash.decode(result.hexBytes)
+				}));
+			}
+		else res.end(null);
+		}).catch((err) => { res.end(null); });
 	});
 
 

@@ -11,7 +11,7 @@ import socket
 import requests
 import time
 import threading
-from dns import message, rrset, rdatatype
+from dns import message, rrset, rdatatype, rdata
 
 AUTH_IP = "0.0.0.0"
 
@@ -95,8 +95,13 @@ class Resolver:
             return
         qry = self.query
 
+        log(f"qry.rdtype: {qry.rdtype} ({rdatatype.URI} or {rdatatype.TXT}")
         if qry.rdtype == rdatatype.URI or qry.rdtype == rdatatype.TXT:
             url = f"{ETH_LINK_BASE_URL}content/{qry.eth_name}"
+        elif qry.rdtype == rdatatype.WALLET:
+            url = f"{ETH_LINK_BASE_URL}wallet/{qry.eth_name}"
+        elif qry.rdtype == rdatatype.PTR:
+            url = f"{ETH_LINK_BASE_URL}name/{qry.eth_name.split(".")[0]}"
         else:
             url = f"{ETH_LINK_BASE_URL}dns/{qry.eth_name}/{qry.qtype}"
 
@@ -120,8 +125,9 @@ class Resolver:
                     reply.answer.append(
                         rrset.from_text(qry.qname + ".", DEFAULT_TTL, "IN", "A",
                                         ip))
-            if qry.rdtype == rdatatype.URI or qry.rdtype == rdatatype.TXT:
+            elif qry.rdtype == rdatatype.URI or qry.rdtype == rdatatype.TXT:
                 reply.answer.append(rrset.from_text(f"{qry.qname}.", DEFAULT_TTL, "IN", qry.qtype, self.url_from_data({})))
+
             sock.sendto(reply.to_wire(), qry.asker[1])
             return
 
@@ -132,8 +138,12 @@ class Resolver:
 
         if qry.rdtype == rdatatype.URI or qry.rdtype == rdatatype.TXT:
             reply.answer.append(rrset.from_text(f"{qry.qname}.", DEFAULT_TTL, "IN", qry.qtype, self.url_from_data(js_ans)))
-        else:
+        elif qry.rdtype == rdatatype.WALLET:
+            reply.answer.append(rrset.from_text(f"{qry.qname}.", DEFAULT_TTL, "IN", qry.qtype, f"\"ETH\" \"{js_ans['wallet']}\""))
+        elif qry.rdtype == rdatatype.A:
             reply.answer.append(rrset.from_text(js_ans["name"]+".",js_ans["ttl"],js_ans["class"],js_ans["type"],js_ans["data"]))
+        elif qry.rdtype == rdatatype.PTR and js_ans.get("name",None) is not None:
+            reply.answer.append(rrset.from_text(f"{qry.qname}.", DEFAULT_TTL, "IN", qry.qtype, js_ans["name"].rstrip(".")+"."))
 
         sock.sendto(reply.to_wire(), qry.asker[1])
 

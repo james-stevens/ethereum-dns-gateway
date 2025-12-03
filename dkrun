@@ -1,5 +1,7 @@
 #! /bin/sh
 
+# test `bin/rest.mjs` -> curl 127.0.0.1:8081/content/bitsofcode.eth
+
 # test ETH -> curl 127.0.0.8/content/bitsofcode.eth
 # dig @127.0.0.8 bitsofcode.eth uri
 
