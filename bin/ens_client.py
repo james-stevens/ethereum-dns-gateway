@@ -13,6 +13,7 @@ EIP-3668 CCIP-Read is not implemented. A revert whose data starts with
 """
 
 import threading
+import unicodedata
 
 import requests
 
@@ -82,23 +83,81 @@ def alchemy_mainnet_url(api_key):
     return f"https://{ALCHEMY_MAINNET_HOST}/v2/{api_key}"
 
 
+def _label_to_unicode(label):
+    """Decode one label. ``xn--`` uses the ``punycode`` codec, not IDNA rules.
+
+    IDNA rejects emoji labels that ENS accepts. A failed punycode decode
+    returns ``None`` so the lookup becomes an empty DNS answer.
+    """
+    if label.lower().startswith("xn--"):
+        try:
+            decoded = label.lower()[4:].encode("ascii").decode("punycode")
+        except UnicodeError:
+            return None
+    else:
+        decoded = label
+    normalized = unicodedata.normalize("NFC", decoded).lower()
+    if not normalized or "." in normalized or "\x00" in normalized:
+        return None
+    return normalized
+
+
 def normalize_name(name):
-    text = name.strip().lower()
+    """Unicode ENS name: punycode decoded, NFC, lowercased.
+
+    Raises ``ValueError`` when a ``xn--`` label is not valid punycode.
+    """
+    text = name.strip()
     if text.endswith("."):
         text = text[:-1]
-    return text
+    if text == "":
+        return ""
+    labels = []
+    for label in text.split("."):
+        decoded = _label_to_unicode(label)
+        if decoded is None:
+            raise ValueError("invalid ens label")
+        labels.append(decoded)
+    return ".".join(labels)
+
+
+def to_puny(name):
+    """Encode non-ASCII labels as ``xn--`` punycode for a DNS answer.
+
+    Returns ``None`` when ``name`` contains punycode that will not decode.
+    ASCII labels are left as normalized text. This is the lenient per-label
+    counterpart of encoding a name back onto the wire.
+    """
+    if name is None:
+        return None
+    stripped = name.strip()
+    if stripped in ("", "."):
+        return stripped
+    try:
+        normalized = normalize_name(stripped)
+    except ValueError:
+        return None
+    if normalized == "":
+        return ""
+    encoded = []
+    for label in normalized.split("."):
+        if label.isascii():
+            encoded.append(label)
+            continue
+        try:
+            encoded.append("xn--" + label.encode("punycode").decode("ascii"))
+        except UnicodeError:
+            return None
+    return ".".join(encoded)
 
 
 def namehash(name):
-    """EIP-137 namehash. ``name`` is lowercased; ENSIP-15 is not applied."""
+    """EIP-137 namehash of the normalized Unicode name. No ENSIP-15 tables."""
     node = bytes(32)
     normalized = normalize_name(name)
     if not normalized:
         return node
-    labels = normalized.split(".")
-    if any(label == "" for label in labels):
-        raise ValueError("empty label in ENS name")
-    for label in reversed(labels):
+    for label in reversed(normalized.split(".")):
         node = keccak256(node + keccak256(label.encode("utf-8")))
     return node
 
@@ -383,6 +442,34 @@ def parse_rpc_result(body):
         raise TransportError("rpc result is not hex") from exc
 
 
+def _puny_name_text(name):
+    text = name.to_text()
+    absolute = text == "." or text.endswith(".")
+    if text != "." and text.endswith("."):
+        text = text[:-1]
+    puny = to_puny(text)
+    if puny is None:
+        raise ValueError("invalid dns name")
+    if puny == ".":
+        return "."
+    return puny + "." if absolute else puny
+
+
+def _rdata_text(rdata):
+    """Presentation text, with domain names written as punycode labels."""
+    kind = dns.rdatatype.to_text(rdata.rdtype)
+    if kind in ("CNAME", "NS", "PTR", "DNAME") and hasattr(rdata, "target"):
+        return _puny_name_text(rdata.target)
+    if kind == "MX" and hasattr(rdata, "exchange"):
+        return f"{int(rdata.preference)} {_puny_name_text(rdata.exchange)}"
+    if kind == "SRV" and hasattr(rdata, "target"):
+        return f"{int(rdata.priority)} {int(rdata.weight)} {int(rdata.port)} {_puny_name_text(rdata.target)}"
+    if kind == "SOA" and hasattr(rdata, "mname"):
+        timers = f"{int(rdata.serial)} {int(rdata.refresh)} {int(rdata.retry)} {int(rdata.expire)} {int(rdata.minimum)}"
+        return f"{_puny_name_text(rdata.mname)} {_puny_name_text(rdata.rname)} {timers}"
+    return rdata.to_text()
+
+
 def parse_wire_rrs(wire):
     """Decode one or more uncompressed or compressed DNS resource records."""
     records = []
@@ -406,12 +493,15 @@ def parse_wire_rrs(wire):
         owner = name.to_text()
         if owner != "." and owner.endswith("."):
             owner = owner[:-1]
+        owner = to_puny(owner)
+        if owner is None:
+            raise ValueError("invalid dns name")
         records.append({
             "name": owner,
             "ttl": ttl,
             "class": dns.rdataclass.to_text(rclass),
             "type": dns.rdatatype.to_text(rtype),
-            "data": rdata.to_text(),
+            "data": _rdata_text(rdata),
         })
     return records
 

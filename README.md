@@ -36,8 +36,7 @@ Off-chain lookups are not performed. When a resolver reverts with `OffchainLooku
 
 ### Other gaps
 
-- ENSIP-15 Unicode normalization is not applied. Names are ASCII-lowercased and hashed as UTF-8, which matches the EIP-137 test vectors (`vitalik.eth`, `foo.eth`, `eth`).
-- Only the ENS registry on Ethereum mainnet is queried. Impervious and `.forever` names, which the old `@imperviousinc/id` helper understood, are not.
+- DNS queries carry punycode (`xn--`) labels. Each of those labels is decoded with Python's `punycode` codec (not IDNA, which rejects emoji), then NFC-normalized and lowercased, and the UTF-8 result is hashed. PTR targets and other names in answers are encoded back to punycode the same way. A label that is not valid punycode is an empty answer. Full ENSIP-15 character tables are not applied. ASCII test vectors (`vitalik.eth`, `foo.eth`, `eth`) are unchanged.
 - Text records and the owner address were exposed by the old REST helper and were not used for DNS. They are not queried.
 - The ETH address is the legacy `addr(bytes32)` value. Multicoin `addr(bytes32,uint256)` is not read.
 - IPFS and IPNS contenthashes are decoded the way the old `content-hash` package decoded them: base58btc of the CID multihash. For the common dag-pb + sha2-256 record that is a CIDv0 `Qm...` string. An IPNS identity hash (DNSLink plaintext) stays that base58 multihash rather than the raw hostname.
@@ -56,7 +55,7 @@ The image is Alpine 3.24 with `python3`, `py3-dnspython`, `py3-requests` and `py
 python3 -m unittest discover -s tests
 ```
 
-The suite includes the EIP-137 namehash vectors, ABI encode/decode, the content-hash IPFS vector `QmRAQB6YaCyidP37UdDnjFY5vQuiBrcqdyoW1CuDgwxkD4`, and a recorded `bitsofcode.eth` JSON-RPC fixture. To refresh that fixture from a public endpoint:
+The suite includes the EIP-137 namehash vectors, an emoji `.eth` punycode round trip, ABI encode/decode, the content-hash IPFS vector `QmRAQB6YaCyidP37UdDnjFY5vQuiBrcqdyoW1CuDgwxkD4`, and a recorded `bitsofcode.eth` JSON-RPC fixture. To refresh that fixture from a public endpoint:
 
 ```
 python3 tests/live_bitsofcode.py

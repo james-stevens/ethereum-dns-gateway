@@ -20,7 +20,7 @@ import dns.rdatatype
 import dns.rdtypes.txtbase
 import dns.rrset
 
-from ens_client import EnsClient, TransportError, alchemy_mainnet_url
+from ens_client import EnsClient, TransportError, alchemy_mainnet_url, to_puny
 
 AUTH_IP = "0.0.0.0"
 DNS_MAX_QUERY = 1024
@@ -102,8 +102,10 @@ def answer_rrsets(qname, eth_name, rdtype, payload, redirect_ips):
     if rdtype == dns.rdatatype.PTR:
         if not payload:
             return []
-        target = str(payload).rstrip(".") + "."
-        return [dns.rrset.from_text(f"{qname}.", DEFAULT_TTL, "IN", qtype, target)]
+        target = to_puny(str(payload))
+        if not target:
+            return []
+        return [dns.rrset.from_text(f"{qname}.", DEFAULT_TTL, "IN", qtype, target.rstrip(".") + ".")]
     records = payload or []
     if rdtype == dns.rdatatype.A and not records:
         return [

@@ -38,9 +38,11 @@ from ens_client import (
     encode_supports_interface,
     is_offchain_lookup,
     namehash,
+    normalize_name,
     parse_rpc_result,
     parse_wire_rrs,
     selector,
+    to_puny,
 )
 import eth_redirect
 from eth_redirect import WALLET, answer_rrsets, fill_reply, main
@@ -117,6 +119,34 @@ class NamehashAbiContentTests(unittest.TestCase):
     def test_empty_label_rejected(self):
         with self.assertRaises(ValueError):
             namehash("foo..eth")
+
+    def test_emoji_punycode_round_trip_and_namehash(self):
+        emoji = "💩"
+        unicode_name = emoji + ".eth"
+        puny = "xn--ls8h.eth"
+        # Independent of normalize_name: hash the Unicode label bytes directly.
+        expected = ens_client.keccak256(namehash("eth") + ens_client.keccak256(emoji.encode("utf-8")))
+        self.assertEqual(expected.hex(), "3aef7cc933c5fb65036d4ddd389fdf5c65b1fc79e9c1f34655c86e373d974d76")
+        self.assertEqual(normalize_name(puny), unicode_name)
+        self.assertEqual(normalize_name("XN--LS8H.ETH"), unicode_name)
+        self.assertEqual(to_puny(unicode_name), puny)
+        self.assertEqual(to_puny(puny), puny)
+        self.assertEqual(namehash(puny), expected)
+        self.assertEqual(namehash(unicode_name), expected)
+        self.assertEqual(
+            dns_encode(puny),
+            bytes([len(emoji.encode("utf-8"))]) + emoji.encode("utf-8") + b"\x03eth\x00",
+        )
+        # NFC then lowercase, so the punycode of U+00C9 matches U+00E9.
+        self.assertEqual(namehash("xn--dca.eth"), namehash("é.eth"))
+        self.assertEqual(namehash("É.eth"), namehash("é.eth"))
+        self.assertEqual(to_puny("É.eth"), "xn--9ca.eth")
+        self.assertEqual(normalize_name("e\u0301.eth"), "é.eth")
+
+    def test_invalid_punycode_is_rejected(self):
+        with self.assertRaises(ValueError):
+            namehash("xn--???.eth")
+        self.assertIsNone(to_puny("xn--???.eth"))
 
     def test_dns_encode(self):
         self.assertEqual(dns_encode("vitalik.eth"), bytes.fromhex("07766974616c696b0365746800"))
@@ -292,6 +322,12 @@ class ResolverClientTests(unittest.TestCase):
         self.assertIsNone(self.client(script).primary_name("not-an-address"))
         self.assertEqual(script.seen, [])
 
+    def test_invalid_punycode_is_an_empty_lookup(self):
+        script = Script()
+        self.assertIsNone(self.client(script).eth_address("xn--???.eth"))
+        self.assertIsNone(self.client(script).content("xn--???.eth"))
+        self.assertEqual(script.seen, [])
+
     def test_transport_error_propagates(self):
         script = Script()
         script.add(*registry("vitalik.eth", None)[:2], TransportError("down"))
@@ -393,6 +429,16 @@ class GatewayAnswerTests(unittest.TestCase):
         finally:
             if previous is not None:
                 os.environ["ALCHEMY_API_CODE"] = previous
+
+    def test_ptr_emoji_name_is_encoded_as_punycode(self):
+        ptr = self.reply("PTR", "💩.eth", "xn--ls8h.eth")
+        text = ptr.answer[0].to_text()
+        self.assertIn("xn--ls8h.eth.", text)
+        self.assertNotIn("💩", text)
+        self.assertEqual(ptr.rcode(), 0)
+        empty = self.reply("PTR", "xn--???.eth", "xn--ls8h.eth")
+        self.assertEqual(list(empty.answer), [])
+        self.assertTrue(empty.authority)
 
     def test_rrset_helper_matches_the_legacy_uri_shape(self):
         rows = answer_rrsets(
