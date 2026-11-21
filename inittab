@@ -1,3 +1,2 @@
 ::respawn:/usr/local/bin/start_syslogd
-::respawn:/usr/local/bin/rest.mjs
 ::respawn:/usr/local/bin/start_eth_redirect

@@ -6,10 +6,7 @@ FROM alpine:3.24
 RUN apk update
 RUN apk upgrade
 
-RUN apk add nodejs npm
-RUN npm install -g express @imperviousinc/id ethers content-hash
-
-RUN apk add python3 py3-dnspython py3-requests
+RUN apk add python3 py3-dnspython py3-requests py3-pycryptodome
 
 RUN rm -rf /run /tmp
 RUN ln -s /dev/shm /run
