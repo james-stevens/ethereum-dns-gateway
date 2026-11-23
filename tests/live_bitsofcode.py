@@ -48,20 +48,28 @@ def record(url):
     address = client.eth_address(NAME)
     primary = client.primary_name(address) if address else None
     return {
-        "name": NAME,
-        "address": address,
-        "primary": primary,
-        "content": content,
-        "uri": None if not content else f"https://ipfs.io/ipfs/{content['value']}"
-        if content.get("codec") == "ipfs-ns"
-        else f"https://ipfs.io/ipns/{content['value']}",
-        "rpc": url,
-        "calls": calls,
+        "name":
+        NAME,
+        "address":
+        address,
+        "primary":
+        primary,
+        "content":
+        content,
+        "uri":
+        None if not content else
+        f"https://ipfs.io/ipfs/{content['value']}" if content.get("codec")
+        == "ipfs-ns" else f"https://ipfs.io/ipns/{content['value']}",
+        "rpc":
+        url,
+        "calls":
+        calls,
     }
 
 
 def main():
-    urls = [os.environ["ENS_RPC_URL"]] if os.environ.get("ENS_RPC_URL") else PUBLIC_URLS
+    urls = [os.environ["ENS_RPC_URL"]
+            ] if os.environ.get("ENS_RPC_URL") else PUBLIC_URLS
     last_error = None
     payload = None
     for url in urls:
@@ -77,10 +85,19 @@ def main():
     FIXTURE.parent.mkdir(parents=True, exist_ok=True)
     FIXTURE.write_text(json.dumps(payload, indent=2) + "\n")
     uri = answer_rrsets(NAME, NAME, dns.rdatatype.URI, payload["content"], [])
-    wallet = answer_rrsets(NAME, NAME, dns.rdatatype.from_text("WALLET"), payload["address"], [])
+    wallet = answer_rrsets(NAME, NAME, dns.rdatatype.from_text("WALLET"),
+                           payload["address"], [])
     ptr_name = f"{payload['address']}.eth" if payload["address"] else NAME
-    ptr = answer_rrsets(ptr_name, NAME, dns.rdatatype.PTR, payload["primary"], [])
-    print(json.dumps({k: payload[k] for k in ("name", "address", "primary", "content", "uri", "rpc")}, indent=2))
+    ptr = answer_rrsets(ptr_name, NAME, dns.rdatatype.PTR, payload["primary"],
+                        [])
+    print(
+        json.dumps(
+            {
+                k: payload[k]
+                for k in ("name", "address", "primary", "content", "uri",
+                          "rpc")
+            },
+            indent=2))
     print("URI  ", uri[0].to_text() if uri else "<empty>")
     print("WALLET", wallet[0].to_text() if wallet else "<empty>")
     print("PTR ", ptr[0].to_text() if ptr else "<empty>")

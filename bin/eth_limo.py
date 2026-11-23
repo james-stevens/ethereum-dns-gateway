@@ -40,6 +40,7 @@ def add_soa(reply):
 
 
 class Resolver:
+
     def __init__(self):
         self.query = None
 
@@ -97,6 +98,7 @@ class Resolver:
 
 
 class Query:
+
     def __init__(self, qry, sender):
         self.line_query = qry
         self.qname = str(qry.question[0].name)[:-1]

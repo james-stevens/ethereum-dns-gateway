@@ -71,7 +71,8 @@ def selector(signature):
         return found
 
 
-OFFCHAIN_LOOKUP = selector("OffchainLookup(address,string[],bytes,bytes4,bytes)")
+OFFCHAIN_LOOKUP = selector(
+    "OffchainLookup(address,string[],bytes,bytes4,bytes)")
 EXTENDED_RESOLVER = selector("resolve(bytes,bytes)")
 
 
@@ -237,7 +238,8 @@ def encode_bytes_args(selector_bytes, blobs):
 def encode_supports_interface(interface_id):
     if len(interface_id) != 4:
         raise ValueError("interface id must be 4 bytes")
-    return selector("supportsInterface(bytes4)") + interface_id.ljust(32, b"\x00")
+    return selector("supportsInterface(bytes4)") + interface_id.ljust(
+        32, b"\x00")
 
 
 def abi_encode_bytes(payload):
@@ -424,7 +426,8 @@ def parse_rpc_result(body):
         error = body["error"] if isinstance(body["error"], dict) else {}
         message = str(error.get("message") or "")
         payload = _error_payload(error)
-        reverted = error.get("code") == 3 or "revert" in message.lower() or is_offchain_lookup(payload)
+        reverted = error.get("code") == 3 or "revert" in message.lower(
+        ) or is_offchain_lookup(payload)
         if not reverted:
             raise TransportError(message or "rpc error")
         return None
@@ -539,7 +542,8 @@ class EnsClient:
             node = namehash(name)
         except ValueError:
             return None
-        raw = self._resolve(name, encode_static_words("contenthash(bytes32)", [node]))
+        raw = self._resolve(
+            name, encode_static_words("contenthash(bytes32)", [node]))
         if not raw:
             return None
         try:
@@ -567,7 +571,8 @@ class EnsClient:
             node = namehash(reverse_name)
         except ValueError:
             return None
-        raw = self._resolve(reverse_name, encode_static_words("name(bytes32)", [node]))
+        raw = self._resolve(reverse_name,
+                            encode_static_words("name(bytes32)", [node]))
         if not raw:
             return None
         try:
@@ -586,12 +591,14 @@ class EnsClient:
         try:
             node = namehash(name)
             wire_name = dns_encode(name)
-            type_id = int(dns.rdatatype.from_text(rrtype)) if isinstance(rrtype, str) else int(rrtype)
+            type_id = int(dns.rdatatype.from_text(rrtype)) if isinstance(
+                rrtype, str) else int(rrtype)
         except (ValueError, dns.rdatatype.UnknownRdatatype):
             return None
         calldata = encode_static_words(
             "dnsRecord(bytes32,bytes32,uint16)",
-            [node, keccak256(wire_name), type_id.to_bytes(2, "big")],
+            [node, keccak256(wire_name),
+             type_id.to_bytes(2, "big")],
         )
         raw = self._resolve(name, calldata)
         if not raw:
@@ -614,7 +621,8 @@ class EnsClient:
             return None
         if self._supports_extended(resolver):
             try:
-                packet = encode_bytes_args(EXTENDED_RESOLVER, [dns_encode(name), calldata])
+                packet = encode_bytes_args(EXTENDED_RESOLVER,
+                                           [dns_encode(name), calldata])
             except ValueError:
                 return None
             outer = self._eth_call(resolver, packet)
@@ -647,7 +655,9 @@ class EnsClient:
         return None
 
     def _resolver_of(self, name):
-        raw = self._eth_call(ENS_REGISTRY, encode_static_words("resolver(bytes32)", [namehash(name)]))
+        raw = self._eth_call(
+            ENS_REGISTRY,
+            encode_static_words("resolver(bytes32)", [namehash(name)]))
         return decode_address(raw)
 
     def _supports_extended(self, resolver):
@@ -655,7 +665,8 @@ class EnsClient:
         cached = self._extended.get(key)
         if cached is not None:
             return cached
-        raw = self._eth_call(resolver, encode_supports_interface(EXTENDED_RESOLVER))
+        raw = self._eth_call(resolver,
+                             encode_supports_interface(EXTENDED_RESOLVER))
         supported = decode_bool(raw)
         self._extended[key] = supported
         return supported
@@ -675,10 +686,15 @@ class EnsClient:
             "jsonrpc": "2.0",
             "id": self.request_id,
             "method": "eth_call",
-            "params": [{"to": to, "data": "0x" + data.hex()}, "latest"],
+            "params": [{
+                "to": to,
+                "data": "0x" + data.hex()
+            }, "latest"],
         }
         try:
-            response = self._session.post(self.url, json=payload, timeout=self.timeout)
+            response = self._session.post(self.url,
+                                          json=payload,
+                                          timeout=self.timeout)
             response.raise_for_status()
             body = response.json()
         except (requests.RequestException, ValueError) as exc:

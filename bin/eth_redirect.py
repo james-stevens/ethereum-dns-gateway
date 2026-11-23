@@ -74,7 +74,9 @@ def log(line):
 def presentation(rdtype, eth_name, payload):
     data = payload or {}
     base = "1 1 " if rdtype == dns.rdatatype.URI else " "
-    if isinstance(data, dict) and data.get("codec") in KNOWN_CODECS and data.get("value"):
+    if isinstance(
+            data,
+            dict) and data.get("codec") in KNOWN_CODECS and data.get("value"):
         return base + KNOWN_CODECS[data["codec"]].format(value=data["value"])
     return base + LIMO_URL.format(eth_name=eth_name)
 
@@ -93,19 +95,26 @@ def answer_rrsets(qname, eth_name, rdtype, payload, redirect_ips):
     qtype = dns.rdatatype.to_text(rdtype)
     if rdtype in (dns.rdatatype.URI, dns.rdatatype.TXT):
         text = presentation(rdtype, eth_name, payload)
-        return [dns.rrset.from_text(f"{qname}.", DEFAULT_TTL, "IN", qtype, text)]
+        return [
+            dns.rrset.from_text(f"{qname}.", DEFAULT_TTL, "IN", qtype, text)
+        ]
     if rdtype == WALLET:
         if not payload:
             return []
         text = f'"ETH" "{payload}"'
-        return [dns.rrset.from_text(f"{qname}.", DEFAULT_TTL, "IN", qtype, text)]
+        return [
+            dns.rrset.from_text(f"{qname}.", DEFAULT_TTL, "IN", qtype, text)
+        ]
     if rdtype == dns.rdatatype.PTR:
         if not payload:
             return []
         target = to_puny(str(payload))
         if not target:
             return []
-        return [dns.rrset.from_text(f"{qname}.", DEFAULT_TTL, "IN", qtype, target.rstrip(".") + ".")]
+        return [
+            dns.rrset.from_text(f"{qname}.", DEFAULT_TTL, "IN", qtype,
+                                target.rstrip(".") + ".")
+        ]
     records = payload or []
     if rdtype == dns.rdatatype.A and not records:
         return [
@@ -114,8 +123,9 @@ def answer_rrsets(qname, eth_name, rdtype, payload, redirect_ips):
         ]
     out = []
     for rec in records:
-        out.append(dns.rrset.from_text(
-            rec["name"] + ".", rec["ttl"], rec["class"], rec["type"], rec["data"]))
+        out.append(
+            dns.rrset.from_text(rec["name"] + ".", rec["ttl"], rec["class"],
+                                rec["type"], rec["data"]))
     return out
 
 
@@ -148,7 +158,9 @@ class Resolver:
         self.restart()
 
     def restart(self):
-        self.thread = threading.Thread(target=run_resolver, args=(self.idx,), daemon=True)
+        self.thread = threading.Thread(target=run_resolver,
+                                       args=(self.idx, ),
+                                       daemon=True)
 
     def run(self):
         self.thread.start()
@@ -179,7 +191,8 @@ class Resolver:
 
         reply = dns.message.make_response(qry.line_query)
         reply.id = qry.asker[0]
-        fill_reply(reply, qry.qname, qry.eth_name, qry.tld, qry.rdtype, payload, uwr_ips)
+        fill_reply(reply, qry.qname, qry.eth_name, qry.tld, qry.rdtype,
+                   payload, uwr_ips)
         sock.sendto(reply.to_wire(), qry.asker[1])
 
     def clean_up(self):
@@ -193,7 +206,8 @@ class Query:
     def __init__(self, qry, sender):
         self.line_query = qry
         self.qname = str(qry.question[0].name)[:-1]
-        eth_name = self.qname[11:] if self.qname[:11].lower() == "_http._tcp." else self.qname
+        eth_name = self.qname[11:] if self.qname[:11].lower(
+        ) == "_http._tcp." else self.qname
         self.eth_name = eth_name.lower()
         self.rdtype = qry.question[0].rdtype
         self.qtype = dns.rdatatype.to_text(self.rdtype)
