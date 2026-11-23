@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
 
+import dns.flags
 import dns.message
 import dns.name
 import dns.rdata
@@ -45,7 +46,7 @@ from ens_client import (
     selector,
     to_puny,
 )
-from eth_redirect import answer_rrsets, fill_reply
+from eth_redirect import answer_rrsets, fill_reply, reply_wire
 
 VITALIK = "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835"
 VITALIK_ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
@@ -527,6 +528,42 @@ class GatewayAnswerTests(unittest.TestCase):
         empty = self.reply("PTR", "xn--???.eth", "xn--ls8h.eth")
         self.assertEqual(list(empty.answer), [])
         self.assertTrue(empty.authority)
+
+    def _oversized(self, query):
+        reply = dns.message.make_response(query)
+        fill_reply(reply, "example.eth", "example.eth", "eth",
+                   dns.rdatatype.TXT, None)
+        chunk = '"' + ("x" * 200) + '"'
+        reply.answer.append(
+            dns.rrset.from_text("example.eth.", 3600, "IN", "TXT",
+                                " ".join([chunk] * 20)))
+        wire = reply_wire(reply, "example.eth")
+        parsed = dns.message.from_wire(wire)
+        self.assertEqual(parsed.id, query.id)
+        self.assertTrue(parsed.flags & dns.flags.TC)
+        self.assertEqual(len(parsed.question), 1)
+        self.assertEqual(str(parsed.question[0].name), "example.eth.")
+        self.assertEqual(list(parsed.answer), [])
+        self.assertEqual(list(parsed.authority), [])
+        self.assertEqual(list(parsed.additional), [])
+        return wire, parsed
+
+    def test_oversized_edns_reply_is_truncated(self):
+        query = dns.message.make_query("example.eth",
+                                       "TXT",
+                                       use_edns=0,
+                                       payload=1232)
+        self.assertEqual(query.payload, 1232)
+        wire, parsed = self._oversized(query)
+        self.assertLessEqual(len(wire), 1232)
+        self.assertGreaterEqual(parsed.edns, 0)
+
+    def test_oversized_reply_without_edns_is_truncated_at_512(self):
+        query = dns.message.make_query("example.eth", "TXT")
+        self.assertLess(query.edns, 0)
+        wire, parsed = self._oversized(query)
+        self.assertLessEqual(len(wire), 512)
+        self.assertLess(parsed.edns, 0)
 
     def test_rrset_helper_matches_the_legacy_uri_shape(self):
         rows = answer_rrsets(

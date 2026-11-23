@@ -12,6 +12,8 @@ import time
 import types
 from syslog import syslog
 
+import dns.exception
+import dns.flags
 import dns.immutable
 import dns.message
 import dns.rdata
@@ -130,6 +132,27 @@ def fill_reply(reply, qname, eth_name, tld, rdtype, payload):
     return reply
 
 
+def udp_limit(reply):
+    """Bytes the client can accept. EDNS uses the query payload; otherwise 512."""
+    if reply.edns >= 0 and reply.request_payload:
+        return reply.request_payload
+    return 512
+
+
+def reply_wire(reply, qname):
+    """Render a UDP reply, or a TC-only reply if the full message does not fit."""
+    limit = udp_limit(reply)
+    try:
+        return reply.to_wire(max_size=limit)
+    except dns.exception.TooBig:
+        reply.flags |= dns.flags.TC
+        reply.answer = []
+        reply.authority = []
+        reply.additional = []
+        print(f"DNS reply truncated: {qname} limit {limit}", file=sys.stderr)
+        return reply.to_wire(max_size=limit)
+
+
 def run_resolver(idx):
     me = resolvers[idx]
     while True:
@@ -185,7 +208,7 @@ class Resolver:
         reply.id = qry.asker[0]
         fill_reply(reply, qry.qname, qry.eth_name, qry.tld, qry.rdtype,
                    payload)
-        sock.sendto(reply.to_wire(), qry.asker[1])
+        sock.sendto(reply_wire(reply, qry.qname), qry.asker[1])
 
     def clean_up(self):
         if self.query.key in queries:
