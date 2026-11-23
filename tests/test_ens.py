@@ -44,8 +44,7 @@ from ens_client import (
     selector,
     to_puny,
 )
-import eth_redirect
-from eth_redirect import WALLET, answer_rrsets, fill_reply, main
+from eth_redirect import answer_rrsets, fill_reply, main
 
 
 VITALIK = "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835"

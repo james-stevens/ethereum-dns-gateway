@@ -586,10 +586,7 @@ class EnsClient:
         try:
             node = namehash(name)
             wire_name = dns_encode(name)
-            if isinstance(rrtype, str):
-                type_id = int(dns.rdatatype.from_text(rrtype))
-            else:
-                type_id = int(rrtype)
+            type_id = int(dns.rdatatype.from_text(rrtype)) if isinstance(rrtype, str) else int(rrtype)
         except (ValueError, dns.rdatatype.UnknownRdatatype):
             return None
         calldata = encode_static_words(

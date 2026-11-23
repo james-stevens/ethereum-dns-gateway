@@ -193,10 +193,7 @@ class Query:
     def __init__(self, qry, sender):
         self.line_query = qry
         self.qname = str(qry.question[0].name)[:-1]
-        if self.qname[:11].lower() == "_http._tcp.":
-            eth_name = self.qname[11:]
-        else:
-            eth_name = self.qname
+        eth_name = self.qname[11:] if self.qname[:11].lower() == "_http._tcp." else self.qname
         self.eth_name = eth_name.lower()
         self.rdtype = qry.question[0].rdtype
         self.qtype = dns.rdatatype.to_text(self.rdtype)
