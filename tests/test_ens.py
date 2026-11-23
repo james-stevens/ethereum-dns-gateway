@@ -476,8 +476,7 @@ class GatewayAnswerTests(unittest.TestCase):
         query = dns.message.make_query(eth_name, qtype)
         response = dns.message.make_response(query)
         rdtype = dns.rdatatype.from_text(qtype)
-        fill_reply(response, eth_name, eth_name, "eth", rdtype, payload,
-                   ["78.129.239.31"])
+        fill_reply(response, eth_name, eth_name, "eth", rdtype, payload)
         return response
 
     def test_uri_ipfs_wallet_ptr_and_empty_fallbacks(self):
@@ -505,8 +504,11 @@ class GatewayAnswerTests(unittest.TestCase):
         self.assertEqual(empty.rcode(), 0)
         self.assertTrue(empty.authority)
 
-        hosts = self.reply("A", None)
-        self.assertIn("78.129.239.31", hosts.answer[0].to_text())
+        for qtype in ("A", "AAAA"):
+            hosts = self.reply(qtype, None)
+            self.assertEqual(list(hosts.answer), [])
+            self.assertEqual(hosts.rcode(), 0)
+            self.assertEqual(hosts.authority[0].rdtype, dns.rdatatype.SOA)
         stored = self.reply("A", [{
             "name": "bitsofcode.eth",
             "ttl": 60,
@@ -515,7 +517,6 @@ class GatewayAnswerTests(unittest.TestCase):
             "data": "9.9.9.9",
         }])
         self.assertIn("9.9.9.9", stored.answer[0].to_text())
-        self.assertNotIn("78.129.239.31", stored.answer[0].to_text())
 
     def test_ptr_emoji_name_is_encoded_as_punycode(self):
         ptr = self.reply("PTR", "💩.eth", "xn--ls8h.eth")
@@ -536,7 +537,6 @@ class GatewayAnswerTests(unittest.TestCase):
                 "codec": "ipns-ns",
                 "value": "k51"
             },
-            [],
         )
         text = rows[0].to_text()
         self.assertIn("1 1", text)
@@ -570,7 +570,7 @@ class BitsofcodeFixtureTests(unittest.TestCase):
         self.assertEqual(client.primary_name(payload["address"]),
                          payload["primary"])
         uri = answer_rrsets(payload["name"], payload["name"],
-                            dns.rdatatype.URI, payload["content"], [])
+                            dns.rdatatype.URI, payload["content"])
         self.assertIn(payload["uri"], uri[0].to_text())
 
 

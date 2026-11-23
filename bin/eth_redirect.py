@@ -1,7 +1,7 @@
 #! /usr/bin/python3
 # (c) Copyright 2022-2025, James Stevens ... see LICENSE for details
 # Alternative license arrangements possible, contact me for more information
-"""DNS/53 gateway from ENS names to WALLET, PTR, URI, TXT and A records."""
+"""DNS/53 gateway from ENS names to WALLET, PTR and URI records."""
 
 import argparse
 import os
@@ -35,7 +35,6 @@ LIMO_URL = "https://{eth_name}.limo/"
 sock = None
 queries = {}
 resolvers = []
-uwr_ips = []
 to_syslog = False
 with_logging = False
 
@@ -90,7 +89,7 @@ def soa_rrset(tld):
     )
 
 
-def answer_rrsets(qname, eth_name, rdtype, payload, redirect_ips):
+def answer_rrsets(qname, eth_name, rdtype, payload):
     qtype = dns.rdatatype.to_text(rdtype)
     if rdtype in (dns.rdatatype.URI, dns.rdatatype.TXT):
         text = presentation(rdtype, eth_name, payload)
@@ -114,25 +113,19 @@ def answer_rrsets(qname, eth_name, rdtype, payload, redirect_ips):
             dns.rrset.from_text(f"{qname}.", DEFAULT_TTL, "IN", qtype,
                                 target.rstrip(".") + ".")
         ]
-    records = payload or []
-    if rdtype == dns.rdatatype.A and not records:
-        return [
-            dns.rrset.from_text(qname + ".", DEFAULT_TTL, "IN", "A", ip)
-            for ip in redirect_ips
-        ]
     out = []
-    for rec in records:
+    for rec in payload or []:
         out.append(
             dns.rrset.from_text(rec["name"] + ".", rec["ttl"], rec["class"],
                                 rec["type"], rec["data"]))
     return out
 
 
-def fill_reply(reply, qname, eth_name, tld, rdtype, payload, redirect_ips):
+def fill_reply(reply, qname, eth_name, tld, rdtype, payload):
     reply.index = None
     reply.flags = 0x8400
     reply.authority.append(soa_rrset(tld))
-    for rr in answer_rrsets(qname, eth_name, rdtype, payload, redirect_ips):
+    for rr in answer_rrsets(qname, eth_name, rdtype, payload):
         reply.answer.append(rr)
     return reply
 
@@ -191,7 +184,7 @@ class Resolver:
         reply = dns.message.make_response(qry.line_query)
         reply.id = qry.asker[0]
         fill_reply(reply, qry.qname, qry.eth_name, qry.tld, qry.rdtype,
-                   payload, uwr_ips)
+                   payload)
         sock.sendto(reply.to_wire(), qry.asker[1])
 
     def clean_up(self):
@@ -230,16 +223,14 @@ def find_next():
 
 
 def main(argv=None):
-    global to_syslog, with_logging, uwr_ips, sock, queries, resolvers
+    global to_syslog, with_logging, sock, queries, resolvers
 
     parser = argparse.ArgumentParser(description="ENS DNS gateway")
     parser.add_argument("-t", "--threads", default=2)
     parser.add_argument("-s", "--syslog", action="store_true", default=False)
     parser.add_argument("-l", "--logging", action="store_true")
-    parser.add_argument("-u", "--uwr", required=True)
     args = parser.parse_args(argv)
 
-    uwr_ips = args.uwr.split(",")
     to_syslog = args.syslog
     with_logging = args.logging
     rpc_url, rpc_label = select_rpc_endpoint(os.environ)

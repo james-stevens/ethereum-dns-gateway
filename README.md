@@ -9,7 +9,7 @@ DNS server (UDP port 53) that answers ENS names from Ethereum mainnet. Python ca
 | WALLET | ETH address from the resolver `addr(bytes32)` record, EIP-55 checksummed |
 | PTR | Primary name of `<address>.eth`. The name is kept only when a forward `addr` lookup returns the same address |
 | URI or TXT | IPFS or IPNS contenthash as `https://ipfs.io/ipfs/<cid>` or `https://ipfs.io/ipns/<cid>`. Anything else, including a missing contenthash, is `https://<name>.limo/` |
-| A | ENSIP-6 `dnsRecord` when one is stored. Otherwise the IPv4 addresses in `UWR_IP_ADDRESSES` |
+| A or AAAA | ENSIP-6 `dnsRecord` when one is stored. Otherwise NOERROR with SOA and no answer |
 | other | ENSIP-6 `dnsRecord` for that type, or an empty answer |
 
 ENSIP-10 on-chain wildcards are followed. The gateway walks parent names in the registry. If the resolver it finds is an ancestor of the queried name, it is used only when that resolver implements `resolve(bytes,bytes)`. Resolvers that implement the interface are called through `resolve` for the full DNS-encoded name, which is how on-chain wildcard data is read.
@@ -24,7 +24,7 @@ ENSIP-10 on-chain wildcards are followed. The gateway walks parent names in the 
 
 ## Empty answers and errors
 
-A missing resolver, a zero address, an empty record, or a contract revert is NOERROR with a SOA in the authority section and no answer (NODATA). `A` then uses `UWR_IP_ADDRESSES`. `URI` and `TXT` use `https://<name>.limo/`. The server does not send NXDOMAIN.
+A missing resolver, a zero address, an empty record, or a contract revert is NOERROR with a SOA in the authority section and no answer (NODATA). That includes `A` and `AAAA` when no DNS record is stored. `URI` and `TXT` use `https://<name>.limo/`. The server does not send NXDOMAIN.
 
 If the JSON-RPC endpoint cannot be reached, or the error is not an execution revert, the DNS query is dropped so the client can retry.
 
@@ -52,8 +52,6 @@ RPC endpoint, first match wins:
 
 Startup logs which of those three is in use. The Alchemy key is not written to the log. A key embedded in `ETH_RPC_URL` under a `/v2/` or `/v3/` path is logged as `***`.
 
-- `UWR_IP_ADDRESSES` — comma-separated IPv4 addresses returned for an `A` query that has no ENS DNS record. The startup script passes this to `-u`. There is no default.
-
 The image is Alpine 3.24 with `python3`, `py3-dnspython`, `py3-requests` and `py3-pycryptodome`. It runs with a read-only root filesystem. `/tmp` and `/run` are symlinks to `/dev/shm`. Logs go to the `/opt/data` volume when syslog is not pointed at stdout.
 
 ## Container interface
@@ -62,7 +60,6 @@ For a compose service, publish **UDP port 53** only. The process binds `0.0.0.0:
 
 | Variable | Required | Default |
 |----------|----------|---------|
-| `UWR_IP_ADDRESSES` | yes, for the A-record fallback | none |
 | `ETH_RPC_URL` | no | unset |
 | `ALCHEMY_API_CODE` | no | unset |
 | `SYSLOG_STDOUT` | no | unset; `Y` sends syslog to stdout |

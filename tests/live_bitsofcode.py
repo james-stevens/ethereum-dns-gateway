@@ -82,12 +82,11 @@ def main():
 
     FIXTURE.parent.mkdir(parents=True, exist_ok=True)
     FIXTURE.write_text(json.dumps(payload, indent=2) + "\n")
-    uri = answer_rrsets(NAME, NAME, dns.rdatatype.URI, payload["content"], [])
+    uri = answer_rrsets(NAME, NAME, dns.rdatatype.URI, payload["content"])
     wallet = answer_rrsets(NAME, NAME, dns.rdatatype.from_text("WALLET"),
-                           payload["address"], [])
+                           payload["address"])
     ptr_name = f"{payload['address']}.eth" if payload["address"] else NAME
-    ptr = answer_rrsets(ptr_name, NAME, dns.rdatatype.PTR, payload["primary"],
-                        [])
+    ptr = answer_rrsets(ptr_name, NAME, dns.rdatatype.PTR, payload["primary"])
     print(
         json.dumps(
             {
