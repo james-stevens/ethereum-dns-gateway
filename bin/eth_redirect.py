@@ -3,14 +3,14 @@
 # Alternative license arrangements possible, contact me for more information
 """DNS/53 gateway from ENS names to WALLET, PTR, URI, TXT and A records."""
 
-from syslog import syslog
 import argparse
 import os
-import sys
 import socket
-import time
+import sys
 import threading
+import time
 import types
+from syslog import syslog
 
 import dns.immutable
 import dns.message
@@ -19,8 +19,7 @@ import dns.rdataclass
 import dns.rdatatype
 import dns.rdtypes.txtbase
 import dns.rrset
-
-from ens_client import EnsClient, TransportError, alchemy_mainnet_url, to_puny
+from ens_client import EnsClient, TransportError, select_rpc_endpoint, to_puny
 
 AUTH_IP = "0.0.0.0"
 DNS_MAX_QUERY = 1024
@@ -240,15 +239,11 @@ def main(argv=None):
     parser.add_argument("-u", "--uwr", required=True)
     args = parser.parse_args(argv)
 
-    api_key = os.environ.get("ALCHEMY_API_CODE", "")
-    if not api_key:
-        print("ALCHEMY_API_CODE is not set", file=sys.stderr)
-        return 2
-
     uwr_ips = args.uwr.split(",")
     to_syslog = args.syslog
     with_logging = args.logging
-    rpc_url = alchemy_mainnet_url(api_key)
+    rpc_url, rpc_label = select_rpc_endpoint(os.environ)
+    print(f"ENS RPC endpoint: {rpc_label}", file=sys.stderr)
 
     queries = {}
     resolvers = [Resolver(idx, rpc_url) for idx in range(int(args.threads))]

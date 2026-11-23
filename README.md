@@ -1,6 +1,6 @@
 # ethereum-dns-gateway
 
-DNS server (UDP port 53) that answers ENS names from Ethereum mainnet. Python calls Alchemy's JSON-RPC `eth_call` directly: ENS registry, then the resolver's `addr`, `name`, `contenthash` or `dnsRecord`. The API key is the `ALCHEMY_API_CODE` environment variable, sent to `https://eth-mainnet.g.alchemy.com/v2/<key>`.
+DNS server (UDP port 53) that answers ENS names from Ethereum mainnet. Python calls JSON-RPC `eth_call` directly: ENS registry, then the resolver's `addr`, `name`, `contenthash` or `dnsRecord`. With no RPC configuration it uses the public endpoint `https://ethereum.publicnode.com`.
 
 ## Queries
 
@@ -26,7 +26,7 @@ ENSIP-10 on-chain wildcards are followed. The gateway walks parent names in the 
 
 A missing resolver, a zero address, an empty record, or a contract revert is NOERROR with a SOA in the authority section and no answer (NODATA). `A` then uses `UWR_IP_ADDRESSES`. `URI` and `TXT` use `https://<name>.limo/`. The server does not send NXDOMAIN.
 
-If Alchemy cannot be reached, or the JSON-RPC error is not an execution revert, the DNS query is dropped so the client can retry.
+If the JSON-RPC endpoint cannot be reached, or the error is not an execution revert, the DNS query is dropped so the client can retry.
 
 ## Not implemented
 
@@ -44,10 +44,31 @@ Off-chain lookups are not performed. When a resolver reverts with `OffchainLooku
 
 ## Configuration
 
-- `ALCHEMY_API_CODE` — Alchemy app key for Ethereum mainnet.
-- `UWR_IP_ADDRESSES` — comma-separated IPv4 addresses returned for an `A` query that has no ENS DNS record.
+RPC endpoint, first match wins:
+
+1. `ETH_RPC_URL` — full JSON-RPC URL. Optional. No default.
+2. `ALCHEMY_API_CODE` — Alchemy app key. Optional. No default. When set, calls go to `https://eth-mainnet.g.alchemy.com/v2/<key>`.
+3. Otherwise `https://ethereum.publicnode.com` (keyless Ethereum mainnet).
+
+Startup logs which of those three is in use. The Alchemy key is not written to the log. A key embedded in `ETH_RPC_URL` under a `/v2/` or `/v3/` path is logged as `***`.
+
+- `UWR_IP_ADDRESSES` — comma-separated IPv4 addresses returned for an `A` query that has no ENS DNS record. The startup script passes this to `-u`. There is no default.
 
 The image is Alpine 3.24 with `python3`, `py3-dnspython`, `py3-requests` and `py3-pycryptodome`. It runs with a read-only root filesystem. `/tmp` and `/run` are symlinks to `/dev/shm`. Logs go to the `/opt/data` volume when syslog is not pointed at stdout.
+
+## Container interface
+
+For a compose service, publish **UDP port 53** only. The process binds `0.0.0.0:53/udp` and does not listen on TCP. It treats every queried name as an ENS name. A name such as `vitalik.eth` is answered with the SOA owner `eth.`. The suffix after the first label is the SOA name, so the zone for ordinary ENS names is `eth.`.
+
+| Variable | Required | Default |
+|----------|----------|---------|
+| `UWR_IP_ADDRESSES` | yes, for the A-record fallback | none |
+| `ETH_RPC_URL` | no | unset |
+| `ALCHEMY_API_CODE` | no | unset |
+| `SYSLOG_STDOUT` | no | unset; `Y` sends syslog to stdout |
+| `SYSLOG_SERVER` | no | unset; otherwise logs go to `/opt/data/logs` |
+
+When `ETH_RPC_URL` and `ALCHEMY_API_CODE` are both unset, the RPC URL is `https://ethereum.publicnode.com`.
 
 ## Tests
 

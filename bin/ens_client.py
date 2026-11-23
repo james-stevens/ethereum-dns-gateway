@@ -12,8 +12,10 @@ EIP-3668 CCIP-Read is not implemented. A revert whose data starts with
 ``OffchainLookup`` is an empty answer, as is any other execution revert.
 """
 
+import os
 import threading
 import unicodedata
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 
@@ -24,12 +26,14 @@ except ImportError:  # Debian/Ubuntu package the same library as Cryptodome
 
 import dns.exception
 import dns.name
-import dns.rdataclass
 import dns.rdata
+import dns.rdataclass
 import dns.rdatatype
 
 ENS_REGISTRY = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
 ALCHEMY_MAINNET_HOST = "eth-mainnet.g.alchemy.com"
+# Keyless Ethereum mainnet JSON-RPC. Checked with eth_chainId and an ENS eth_call.
+PUBLIC_MAINNET_RPC = "https://ethereum.publicnode.com"
 
 _B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 _CONTENT_CODECS = {
@@ -84,6 +88,41 @@ def alchemy_mainnet_url(api_key):
     return f"https://{ALCHEMY_MAINNET_HOST}/v2/{api_key}"
 
 
+def describe_rpc_url(url):
+    """Return a URL safe to log. Userinfo, query, and /v2 or /v3 keys are hidden."""
+    parts = urlsplit(url.strip())
+    segments = []
+    hide_next = False
+    for segment in parts.path.split("/"):
+        if hide_next and segment:
+            segments.append("***")
+            hide_next = False
+            continue
+        segments.append(segment)
+        if segment in ("v2", "v3"):
+            hide_next = True
+    host = parts.hostname or ""
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    return urlunsplit((parts.scheme, host, "/".join(segments), "", ""))
+
+
+def select_rpc_endpoint(environ):
+    """Pick the JSON-RPC URL.
+
+    ``ETH_RPC_URL`` wins, then Alchemy when ``ALCHEMY_API_CODE`` is set,
+    otherwise the public mainnet endpoint. The second value is safe to log.
+    """
+    override = environ.get("ETH_RPC_URL", "").strip()
+    if override:
+        return override, "ETH_RPC_URL " + describe_rpc_url(override)
+    api_key = environ.get("ALCHEMY_API_CODE", "").strip()
+    if api_key:
+        return (alchemy_mainnet_url(api_key),
+                f"Alchemy https://{ALCHEMY_MAINNET_HOST}/v2/***")
+    return PUBLIC_MAINNET_RPC, "public default " + PUBLIC_MAINNET_RPC
+
+
 def _label_to_unicode(label):
     """Decode one label. ``xn--`` uses the ``punycode`` codec, not IDNA rules.
 
@@ -109,8 +148,7 @@ def normalize_name(name):
     Raises ``ValueError`` when a ``xn--`` label is not valid punycode.
     """
     text = name.strip()
-    if text.endswith("."):
-        text = text[:-1]
+    text = text.removesuffix(".")
     if text == "":
         return ""
     labels = []
@@ -195,8 +233,7 @@ def checksum_address(raw):
 
 def normalize_address(value):
     text = value.strip().lower()
-    if text.startswith("0x"):
-        text = text[2:]
+    text = text.removeprefix("0x")
     if len(text) != 40:
         return None
     try:
@@ -379,7 +416,7 @@ def decode_contenthash(data):
     empty or the outer multicodec is not one this gateway knows.
     """
     if isinstance(data, str):
-        text = data[2:] if data.startswith("0x") else data
+        text = data.removeprefix("0x")
         data = bytes.fromhex(text)
     if not data:
         return None
@@ -522,12 +559,14 @@ class EnsClient:
         if caller is not None:
             return
         if not url:
-            if not api_key:
-                raise ValueError("ALCHEMY_API_CODE is not set")
-            url = alchemy_mainnet_url(api_key)
+            if api_key:
+                url = alchemy_mainnet_url(api_key)
+            else:
+                url, _label = select_rpc_endpoint(os.environ)
         self.url = url
         self._session = requests.Session()
         self._session.headers["Content-Type"] = "application/json"
+        self._session.headers["User-Agent"] = "ethereum-dns-gateway"
 
     def eth_address(self, name):
         try:

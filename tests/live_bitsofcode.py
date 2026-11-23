@@ -13,16 +13,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
 
 import dns.rdatatype
-
-from ens_client import EnsClient
+from ens_client import EnsClient, TransportError
 from eth_redirect import answer_rrsets
 
 NAME = "bitsofcode.eth"
 PUBLIC_URLS = [
     "https://ethereum.publicnode.com",
+    "https://eth.drpc.org",
     "https://eth.llamarpc.com",
-    "https://cloudflare-eth.com",
-    "https://rpc.ankr.com/eth",
     "https://1rpc.io/eth",
 ]
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "bitsofcode_eth.json"
@@ -76,7 +74,7 @@ def main():
         try:
             payload = record(url)
             break
-        except Exception as exc:
+        except (OSError, ValueError, TransportError) as exc:
             last_error = exc
             print(f"failed {url}: {exc}", file=sys.stderr)
     if payload is None:

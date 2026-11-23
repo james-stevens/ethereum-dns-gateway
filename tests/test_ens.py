@@ -15,12 +15,12 @@ import dns.name
 import dns.rdata
 import dns.rdatatype
 import dns.rrset
-
 import ens_client
 from ens_client import (
     ENS_REGISTRY,
     EXTENDED_RESOLVER,
     OFFCHAIN_LOOKUP,
+    PUBLIC_MAINNET_RPC,
     EnsClient,
     RpcRevert,
     TransportError,
@@ -41,10 +41,11 @@ from ens_client import (
     normalize_name,
     parse_rpc_result,
     parse_wire_rrs,
+    select_rpc_endpoint,
     selector,
     to_puny,
 )
-from eth_redirect import answer_rrsets, fill_reply, main
+from eth_redirect import answer_rrsets, fill_reply
 
 VITALIK = "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835"
 VITALIK_ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
@@ -230,6 +231,44 @@ class NamehashAbiContentTests(unittest.TestCase):
             alchemy_mainnet_url("abc"),
             "https://eth-mainnet.g.alchemy.com/v2/abc",
         )
+
+    def test_rpc_endpoint_precedence(self):
+        url, label = select_rpc_endpoint({})
+        self.assertEqual(url, PUBLIC_MAINNET_RPC)
+        self.assertIn(PUBLIC_MAINNET_RPC, label)
+
+        url, label = select_rpc_endpoint({"ALCHEMY_API_CODE": "secret-key"})
+        self.assertEqual(url, alchemy_mainnet_url("secret-key"))
+        self.assertNotIn("secret-key", label)
+        self.assertIn("eth-mainnet.g.alchemy.com", label)
+
+        url, label = select_rpc_endpoint({
+            "ETH_RPC_URL": "https://user:pw@rpc.example/v2/secret-key?x=1",
+            "ALCHEMY_API_CODE": "other-key",
+        })
+        self.assertEqual(url, "https://user:pw@rpc.example/v2/secret-key?x=1")
+        self.assertNotIn("secret-key", label)
+        self.assertNotIn("other-key", label)
+        self.assertNotIn("pw", label)
+        self.assertIn("rpc.example", label)
+        self.assertIn("***", label)
+
+        self.assertEqual(
+            select_rpc_endpoint({
+                "ETH_RPC_URL": "  ",
+                "ALCHEMY_API_CODE": "  ",
+            })[0], PUBLIC_MAINNET_RPC)
+        blank = {
+            key: os.environ.pop(key, None)
+            for key in ("ETH_RPC_URL", "ALCHEMY_API_CODE")
+        }
+        try:
+            client = EnsClient()
+            self.assertEqual(client.url, PUBLIC_MAINNET_RPC)
+        finally:
+            for key, value in blank.items():
+                if value is not None:
+                    os.environ[key] = value
 
 
 class ResolverClientTests(unittest.TestCase):
@@ -477,14 +516,6 @@ class GatewayAnswerTests(unittest.TestCase):
         }])
         self.assertIn("9.9.9.9", stored.answer[0].to_text())
         self.assertNotIn("78.129.239.31", stored.answer[0].to_text())
-
-    def test_main_requires_the_alchemy_key(self):
-        previous = os.environ.pop("ALCHEMY_API_CODE", None)
-        try:
-            self.assertEqual(main(["-u", "127.0.0.1"]), 2)
-        finally:
-            if previous is not None:
-                os.environ["ALCHEMY_API_CODE"] = previous
 
     def test_ptr_emoji_name_is_encoded_as_punycode(self):
         ptr = self.reply("PTR", "💩.eth", "xn--ls8h.eth")

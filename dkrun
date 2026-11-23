@@ -10,6 +10,7 @@ docker run -it \
 	--read-only \
 	-v ${PWD}/data:/opt/data/ \
 	--env SYSLOG_STDOUT=Y \
+	--env "ETH_RPC_URL=${ETH_RPC_URL}" \
 	--env "ALCHEMY_API_CODE=${ALCHEMY_API_CODE}" \
 	--env "UWR_IP_ADDRESSES=78.129.239.31" \
 	-p 127.0.0.8:53:53/udp \
